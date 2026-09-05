@@ -4,6 +4,10 @@ A bounded AI commerce agent built for Razorpay AI Buildathon 2026, Track 1: AI G
 
 > Commerce that asks before it acts.
 
+## Live demo
+
+https://agentcart-ai-razorpay.vercel.app/
+
 AgentCart converts a natural-language shopping goal into a budget-aware proposal, explains its recommendation, waits for explicit approval, creates a real Razorpay Test Mode order and verifies the final payment state.
 
 The AI can recommend and explain. It cannot independently create orders, change trusted prices or claim that a payment succeeded.
