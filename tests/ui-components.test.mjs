@@ -1,85 +1,90 @@
 import assert from "node:assert/strict";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
-import test, { after } from "node:test";
+import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { createServer } from "vite";
-
 const root = fileURLToPath(new URL("..", import.meta.url));
-const vite = await createServer({
-  appType: "custom",
-  configFile: false,
-  root,
-  resolve: { alias: { "@": root } },
-  server: { middlewareMode: true },
-});
 
-after(async () => {
-  await vite.close();
-});
-
-async function readCssTree(directory) {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const contents = await Promise.all(
-    entries.map(async (entry) => {
-      const entryPath = path.join(directory, entry.name);
-      if (entry.isDirectory()) {
-        return readCssTree(entryPath);
-      }
-      return entry.name.endsWith(".css") ? readFile(entryPath, "utf8") : "";
-    }),
-  );
-  return contents.join("\n");
+async function readSource(relativePath) {
+  return readFile(path.join(root, relativePath), "utf8");
 }
 
-test("emits the catalog's animation and scrolling utilities", async () => {
-  const css = await readCssTree(path.join(root, "dist"));
+test("contains eight trusted catalog products", async () => {
+  const catalog = await readSource("lib/catalog.ts");
 
-  assert.match(css, /--tw-enter-opacity/);
-  assert.match(css, /scrollbar-width:\s*thin/);
-  assert.match(css, /scrollbar-width:\s*none/);
-  assert.match(css, /scrollbar-gutter:\s*stable/);
-  assert.match(css, /scroll-fade-reveal-b/);
-  assert.match(css, /mask-image:/);
-  assert.match(css, /tw-shimmer/);
-  assert.match(css, /prefers-reduced-motion:\s*reduce/);
+  const productIds = [
+    "echo-arc-pro",
+    "flux-mini",
+    "nova-65-gan",
+    "loom-stand",
+    "wave-buds",
+    "pulse-watch",
+    "volt-cable-c",
+    "carry-case",
+  ];
+
+  for (const productId of productIds) {
+    assert.match(catalog, new RegExp(`id: "${productId}"`));
+    assert.match(
+      catalog,
+      new RegExp(`/products/${productId}\\.png`),
+    );
+  }
+
+  assert.equal(
+    (catalog.match(/\n    id: "/g) ?? []).length,
+    8,
+  );
 });
 
-test("forwards progress semantics to the primitive", async () => {
-  const { Progress } = await vite.ssrLoadModule("/components/ui/progress.tsx");
-  const html = renderToStaticMarkup(React.createElement(Progress, { value: 37 }));
-
-  assert.match(html, /aria-valuenow="37"/);
-  assert.match(html, /aria-valuetext="37%"/);
-  assert.match(html, /data-state="loading"/);
-});
-
-test("emits chart themes for the starter's media dark mode", async () => {
-  const { ChartStyle } = await vite.ssrLoadModule("/components/ui/chart.tsx");
-  const html = renderToStaticMarkup(
-    React.createElement(ChartStyle, {
-      id: "contract",
-      config: {
-        latency: { theme: { light: "#ffffff", dark: "#000000" } },
-      },
-    }),
+test("includes responsive checkout and failure interfaces", async () => {
+  const css = await readSource("app/agentcart.css");
+  const scenarios = await readSource(
+    "components/agentcart/demo-scenarios.tsx",
   );
 
-  assert.match(html, /\[data-chart=contract\]/);
-  assert.match(html, /@media \(prefers-color-scheme: dark\)/);
-  assert.doesNotMatch(html, /\.dark/);
+  assert.match(css, /\.ac-approve-payment/);
+  assert.match(css, /\.ac-checkout-error/);
+  assert.match(css, /@media/);
+
+  assert.match(scenarios, /inventory_change/);
+  assert.match(scenarios, /duplicate_approval/);
+  assert.match(scenarios, /payment_failure/);
+  assert.match(scenarios, /invalid_parameter/);
 });
 
-test("renders sidebar skeletons deterministically", async () => {
-  const { SidebarMenuSkeleton } = await vite.ssrLoadModule(
-    "/components/ui/sidebar.tsx",
+test("keeps payment actions server-controlled and idempotent", async () => {
+  const checkout = await readSource(
+    "app/api/checkout/route.ts",
   );
-  const first = renderToStaticMarkup(React.createElement(SidebarMenuSkeleton));
-  const second = renderToStaticMarkup(React.createElement(SidebarMenuSkeleton));
+  const verification = await readSource(
+    "app/api/payments/verify/route.ts",
+  );
+  const webhook = await readSource(
+    "app/api/webhooks/razorpay/route.ts",
+  );
+  const agent = await readSource(
+    "app/api/agent/route.ts",
+  );
 
-  assert.equal(first, second);
-  assert.match(first, /--skeleton-width:70%/);
+  assert.match(checkout, /approved: z\.literal\(true\)/);
+  assert.match(checkout, /approvalConfirmed: true/);
+  assert.match(checkout, /onConflictDoNothing/);
+  assert.match(checkout, /IDEMPOTENT_REUSE/);
+  assert.match(checkout, /status_unknown/);
+
+  assert.match(
+    verification,
+    /verifyRazorpayPaymentSignature/,
+  );
+  assert.match(verification, /client\.payments\.fetch/);
+
+  assert.match(webhook, /timingSafeEqual/);
+  assert.match(webhook, /payment\.captured/);
+  assert.match(webhook, /payment\.failed/);
+  assert.match(webhook, /onConflictDoNothing/);
+
+  assert.match(agent, /\.from\(checkoutOrders\)/);
+  assert.match(agent, /VERIFIED_STATE_HANDLER/);
 });

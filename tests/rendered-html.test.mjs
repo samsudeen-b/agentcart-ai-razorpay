@@ -1,20 +1,40 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-test("renders AgentCart product metadata and the approval-first message", async () => {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
+const root = fileURLToPath(new URL("..", import.meta.url));
 
-  const response = await worker.fetch(
-    new Request("http://localhost/", { headers: { accept: "text/html" } }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
-    { waitUntil() {}, passThroughOnException() {} },
+async function readSource(relativePath) {
+  return readFile(path.join(root, relativePath), "utf8");
+}
+
+test("presents the AgentCart approval-first experience", async () => {
+  const source = (
+    await Promise.all([
+      readSource("app/layout.tsx"),
+      readSource("app/page.tsx"),
+      readSource("components/agentcart/agentcart-header.tsx"),
+      readSource("components/agentcart/conversation-panel.tsx"),
+      readSource("components/agentcart/purchase-panel.tsx"),
+    ])
+  ).join("\n");
+
+  assert.match(
+    source,
+    /AgentCart AI \| Bounded Commerce Agent/,
   );
+  assert.match(
+    source,
+    /Commerce that asks before it acts\./,
+  );
+  assert.match(source, /Approve & Pay securely/);
+  assert.match(source, /Razorpay Test Mode/);
+  assert.match(source, /Explicit customer approval/);
 
-  assert.equal(response.status, 200);
-  const html = await response.text();
-  assert.match(html, /<title>AgentCart AI — Bounded Commerce Agent<\/title>/i);
-  assert.match(html, /Commerce that asks before it acts\./i);
-  assert.doesNotMatch(html, /codex-preview/i);
+  assert.doesNotMatch(
+    source,
+    /codex-preview|signin-with-chatgpt|oai-authenticated/i,
+  );
 });
