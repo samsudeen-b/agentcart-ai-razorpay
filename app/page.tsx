@@ -1,6 +1,10 @@
 "use client";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
-import { useState } from "react";
 import { agentResponseSchema } from "@/lib/agent-contract";
 import { AgentCartHeader } from "@/components/agentcart/agentcart-header";
 import { CatalogPanel } from "@/components/agentcart/catalog-panel";
@@ -110,6 +114,8 @@ function createStatusResponse(
 }
 
 export default function Home() {
+  const proposalIdRef = useRef<string | null>(null);
+
   const [demoState, setDemoState] = useState<AgentCartDemoState>(
     createInventoryDemoState,
   );
@@ -117,6 +123,22 @@ export default function Home() {
   const [isThinking, setIsThinking] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string>();
+
+  useEffect(() => {
+    if (!proposalIdRef.current) {
+      proposalIdRef.current = `proposal-${crypto.randomUUID()}`;
+    }
+
+    const proposalId = proposalIdRef.current;
+
+    setDemoState((current) => ({
+      ...current,
+      proposal: {
+        ...current.proposal,
+        id: proposalId,
+      },
+    }));
+  }, []);
 
   function handleToggleProduct(productId: string) {
     const eventTime = currentTime();
@@ -741,8 +763,22 @@ export default function Home() {
   }
 
   function handleRunScenario(scenario: DemoScenarioId) {
-    setDemoState(createDemoState(scenario));
+    const scenarioState = createDemoState(scenario);
+    const proposalId = `proposal-${crypto.randomUUID()}`;
+
+    proposalIdRef.current = proposalId;
+
+    setDemoState({
+      ...scenarioState,
+      proposal: {
+        ...scenarioState.proposal,
+        id: proposalId,
+      },
+    });
+
     setIsThinking(false);
+    setCheckoutLoading(false);
+    setCheckoutError(undefined);
   }
 
   return (
